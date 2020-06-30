@@ -209,6 +209,7 @@ var run = function(options) {
             console.log("OPC Server is now available at: " + endpointUrl + " ( press CTRL+C to stop)");
 
             var mqttURL = 'mqtt://' + (options.mqttHost || "localhost") + ":" + (options.mqttPort || "1883");
+            console.log("MQTT Connecting to: %s\n", mqttURL);
 
             if (!(server.mqtt = mqtt.connect(mqttURL, { username: options.mqttUsername, password: options.mqttPassword }))) {
                 console.error("MQTT Unable to connect");
@@ -221,11 +222,10 @@ var run = function(options) {
                     const msg = JSON.parse(message);
                     Object.keys(msg).forEach(param => {
                     onMessage(preTopic + param, msg[param]);
-                    })
+                    });
                 } catch (err) {
                     console.error(err);
                 }
-
             }
 
             server.mqtt.on('connect', function() {

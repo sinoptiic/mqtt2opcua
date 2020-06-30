@@ -63,12 +63,12 @@ options = {
     opcName:"/MQTT-OPCUA",
     opcHost:"localhost",
     opcPort:51215,
-    mqttHost:"localhost",
+    mqttHost:process.env.MQTTHOST || "localhost",
     mqttPort:"1883",
-    mqttUsername:"OPCUA",
-    mqttPassword:"",
-    mqttOpcJson: '/mqtt/opc/json',
-    opcMqtt: '/opc/mqtt',
+    mqttUsername:process.env.MQTTNAME || "OPCUA",
+    mqttPassword:process.env.MQTTPASS || "",
+    mqttOpcJson:'/mqtt/opc/json',
+    opcMqtt:'/opc/mqtt',
     debug:true,
     roundtrip:false,	// set to true to limit updates to onMessage (i.e. validate an accuator is set)
     forward:forward,	// data converter - mqtt -> opcua
