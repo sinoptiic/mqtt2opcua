@@ -6,7 +6,7 @@ var opcua = require("node-opcua"),
     Qlobber = require('qlobber').Qlobber;
 
 
-var  _debug  = false;
+var _debug = false;
 
 
 
@@ -31,15 +31,15 @@ function Matcher(handlers) {
 }
 
 Matcher.prototype = Object.create(Events.prototype);
-Matcher.prototype.match = function (topic) {
-    if (Object.prototype.hasOwnProperty.call(this._events, topic)){
+Matcher.prototype.match = function(topic) {
+    if (Object.prototype.hasOwnProperty.call(this._events, topic)) {
         return this._events[topic];
     }
     var matches = this.matcher.match(topic);
     return matches.length ? matches.pop() : null;
 };
 
-Matcher.prototype.init = function () {
+Matcher.prototype.init = function() {
     for (var e in this._events) {
         if (Object.prototype.hasOwnProperty.call(this._events, e)) {
             this.matcher.add(e, this._events[e]);
@@ -47,34 +47,34 @@ Matcher.prototype.init = function () {
     }
 };
 
-Matcher.prototype.hasDefault = function () {
+Matcher.prototype.hasDefault = function() {
     return this._events['#'] !== undefined;
 };
 
-var run = function (options) {
+var run = function(options) {
 
-   _debug = options.debug || false;
+    _debug = options.debug || false;
 
- // Forward and backward handlers - see below for example
+    // Forward and backward handlers - see below for example
     var fhandlers = new Matcher(options.forward),
         bhandlers = new Matcher(options.backward);
 
     if (!fhandlers.hasDefault()) {
-        fhandlers.on("#", function (payload) { // Default backward handler (MQTT -> OPCUA)
+        fhandlers.on("#", function(payload) { // Default backward handler (MQTT -> OPCUA)
             return {
-                dataType: "String",
-                value: String(payload),
+                dataType: "Double",
+                value: parseFloat(payload),
             };
         });
     }
 
     // Default backward handler
     if (!bhandlers.hasDefault()) {
-        
-        bhandlers.on("#", function (variant) { // Default backward handler (OPCUA -> MQTT)
+
+        bhandlers.on("#", function(variant) { // Default backward handler (OPCUA -> MQTT)
             return {
-                topic:variant.topic,
-                payload:variant.value
+                topic: variant.topic,
+                payload: variant.value
             };
         });
     }
@@ -87,12 +87,13 @@ var run = function (options) {
 
     var server = new opcua.OPCUAServer({
         hostname: options.opcHost || "127.0.0.1",
-        port: options.opcPort || 4334, // the port of the listening socket of the server
+        port: options.opcPort || 51215, // the port of the listening socket of the server
         resourcePath: options.opcName || "UA/MQTT Bridge Server", // this path will be added to the endpoint resource name
-        buildInfo : {
+        //allowAnonymous: false,
+        buildInfo: {
             productName: "MQTT2OPCUA Bridge",
             buildNumber: "0.1",
-            buildDate: new Date(2015, 20, 7)
+            buildDate: new Date(2020, 20, 7)
         }
     });
 
@@ -100,10 +101,13 @@ var run = function (options) {
     function post_initialize() {
 
         debug("OPC Server Initialized");
-        var persist = {},    // New persistent store
+        var persist = {}, // New persistent store
             nodes = {},
             paths = {},
             flagged = {};
+
+        const addressSpace = server.engine.addressSpace;
+        const namespace = addressSpace.getOwnNamespace();
 
         function onMessage(topic, payload) {
 
@@ -125,55 +129,61 @@ var run = function (options) {
 
             var sub,
                 path = topic.split("/"),
-                top  = (path[0] || path[1]); // Cater for paths starting with "/"
+                top = (path[0] || path[1]); // Cater for paths starting with "/"     
+
+
 
             node = paths[top] = (paths.hasOwnProperty(top)) ? paths[top] :
-                                server.engine.addressSpace.addFolder("ObjectsFolder", { browseName: top});
+                namespace.addFolder("ObjectsFolder", { browseName: top });
 
             for (sub in path) {
-                if (sub == 0 |!path.hasOwnProperty(sub)) {
+                if (sub == 0 | !path.hasOwnProperty(sub)) {
                     continue;
                 }
 
                 top += "/" + path[sub];
                 if (topic !== top) {
                     node = paths[top] = (paths.hasOwnProperty(top)) ? paths[top] :
-                                        server.engine.addressSpace.addFolder(node, { browseName: path[sub]});
+                        namespace.addFolder(node, { browseName: path[sub] });
                 } else {
                     debug("Creating folders for new topic: " + topic);
                     persist[topic] = handler(payload).value;
+                    debug(persist[topic]);
                     flagged[topic] = false;
                     try {
-                        nodes[topic] = server.engine.addressSpace.addVariable({
+                        nodes[topic] = namespace.addVariable({
                             componentOf: node,
                             browseName: path[sub],
                             path: topic,
                             nodeId: "s=" + topic,
                             dataType: handler(payload).dataType,
+                            //userAccessLevel: "CurrentRead", // TODO
                             value: {
-                                get: function () {
+                                get: function() {
                                     debug("OPCUA Get: " + topic);
                                     return (!flagged[topic]) ?
                                         new opcua.Variant(handler(persist[topic])) :
-                                            opcua.StatusCodes.BadCommunicationError;
-                                    },
-                                set: function (variant) {
+                                        opcua.StatusCodes.BadCommunicationError;
+                                },
+                                set: function(variant) {
                                     debug("OPCUA Set: " + topic);
                                     try {
-                                        variant.topic=topic;
+                                        variant.topic = topic;
                                         var bhandler = bhandlers.match(topic),
-                                            message  = bhandler(variant);
+                                            message = bhandler(variant);
                                         if (message.hasOwnProperty("topic") &&
                                             message.hasOwnProperty("payload")) {
-                                                if (!options.roundtrip)
-                                                    persist[topic] = message.payload;
-                                                else
-                                                    flagged[topic] = true;
-                                                debug("MQTT Publish: " + message.topic.toString() + " (" + message.payload.toString().substr(0,8) + ")" )
-                                                server.mqtt.publish(message.topic.toString(),
-                                                                    message.payload.toString());
-                                            }
-                                    } catch(e){
+                                            if (!options.roundtrip)
+                                                persist[topic] = message.payload;
+                                            else
+                                                flagged[topic] = true;
+                                            debug("MQTT Publish: " + message.topic.toString() + " (" + message.payload.toString().substr(0, 8) + ")")
+                                            server.mqtt.publish(message.topic.toString(),
+                                                message.payload.toString());
+                                            server.mqtt.publish(message.topic.toString() + options.opcMqtt,
+                                                message.payload.toString());
+                                        }
+                                    } catch (e) {
                                         console.error(e);
                                     }
                                     return opcua.StatusCodes.Good;
@@ -189,32 +199,49 @@ var run = function (options) {
         }
 
 
-        server.start(function (err) {
-	    if (err){
-	       console.error(err);
-	       process.exit(1);
-	    }
+        server.start(function(err) {
+            if (err) {
+                console.error(err);
+                process.exit(1);
+            }
 
-	    var endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
-            console.log("OPC Server is now available at: " + endpointUrl +  " ( press CTRL+C to stop)");
+            var endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            console.log("OPC Server is now available at: " + endpointUrl + " ( press CTRL+C to stop)");
 
             var mqttURL = 'mqtt://' + (options.mqttHost || "localhost") + ":" + (options.mqttPort || "1883");
 
-            if (!(server.mqtt = mqtt.connect(mqttURL,{ username: options.mqttUsername, password: options.mqttPassword}))) {
+            if (!(server.mqtt = mqtt.connect(mqttURL, { username: options.mqttUsername, password: options.mqttPassword }))) {
                 console.error("MQTT Unable to connect");
                 process.exit(1);
             }
 
-            server.mqtt.on('connect', function () {
+            function onMessageJson(topic, message) {
+                const preTopic = topic.slice(0, -13); // TODO 
+                try {
+                    const msg = JSON.parse(message);
+                    Object.keys(msg).forEach(param => {
+                    onMessage(preTopic + param, msg[param]);
+                    })
+                } catch (err) {
+                    console.error(err);
+                }
+
+            }
+
+            server.mqtt.on('connect', function() {
                 console.log("MQTT Connected to: %s\n", mqttURL);
                 server.mqtt.subscribe(options.topics || ['$SYS/#', '#']);
             });
 
-            server.mqtt.on('message', function (topic, message) {
+            server.mqtt.on('message', function(topic, message) {
+                if (topic.endsWith(options.mqttOpcJson)) {
+                    onMessageJson(topic, message);
+                    return;
+                }
                 onMessage(topic, message);
             });
 
-            server.mqtt.on('disconnect', function () {
+            server.mqtt.on('disconnect', function() {
                 debug("MQTT Disconnected ");
                 process.exit(1);
             });
