@@ -29,7 +29,7 @@ options = {
     mqttHost:"localhost",
     mqttPort:"8324",
     mqttUsername:"opcua",
-    mqttPassword:"secretpassword",
+    mqttPassword:"",
     debug:true,
     roundtrip:false,	// set to true to limit updates to onMessage (i.e. validate an accuator is set)
     forward:forward,	// data converter - mqtt -> opcua
