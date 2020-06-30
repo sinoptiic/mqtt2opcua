@@ -27,12 +27,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nzfarmer1/mqtt2opcua"
+    "url": "git+https://github.com/nzfarmer1/mqtt2opcua.git"
   },
   "homepage": "https://github.com/nzfarmer1",
   "main": "mqtt2opcua.js",
   "scripts": {
-    "test": "examples/run.js"
+    "test": "node examples/run.js"
   },
   "author": "Andrew McClure",
   "license": "MIT",
